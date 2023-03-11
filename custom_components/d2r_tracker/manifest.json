@@ -1,12 +1,12 @@
 {
+  "domain": "d2r_tracker",
+  "name": "Diablo 2 Resurrected Tracker",
   "codeowners": ["@rbaron"],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/rbaron/d2r-tracker-ha-custom-component",
-  "domain": "d2r_tracker",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/rbaron/d2r-tracker-ha-custom-component/issues",
-  "name": "Diablo 2 Resurrected Tracker",
   "requirements": [],
   "version": "1.0.0"
 }
