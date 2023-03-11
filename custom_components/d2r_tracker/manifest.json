@@ -1,0 +1,14 @@
+{
+  "domain": "d2r_tracker",
+  "name": "Diablo 2 Resurrected Tracker",
+  "codeowners": ["@rbaron"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://www.home-assistant.io/integrations/d2r",
+  "homekit": {},
+  "iot_class": "cloud_polling",
+  "requirements": [],
+  "ssdp": [],
+  "zeroconf": [],
+  "version": "1.0.0"
+}

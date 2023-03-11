@@ -1,0 +1,15 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "data": {
+                    "api_key": "API Key"
+                }
+            }
+        },
+        "error": {
+            "invalid_auth": "Invalid authentication.",
+            "unknown": "Unknown error occurred."
+        }
+    }
+}
