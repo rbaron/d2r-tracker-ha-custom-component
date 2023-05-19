@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
+
+from cachetools import cached, TTLCache
 
 import requests
 
@@ -12,8 +14,9 @@ from homeassistant.const import CONF_API_KEY, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt
 
-from .const import DOMAIN
+from .const import DOMAIN, ORIGIN_D2RUNEWIZARD, ORIGIN_DIABLO2IO
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,18 +49,32 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_ok
 
 
-def get_d2runewizard_api_response(api_key: str | None) -> str:
+def get_d2runewizard_api_response(url: str, api_key: str | None) -> str:
     """Return API response."""
-    headers = {"User-Agent": "Curl"}
-    if api_key is not None:
-        headers["Authorization"] = f"Bearer {api_key}"
-    response = requests.get(
-        "https://d2runewizard.com/api/diablo-clone-progress/all",
-        timeout=60,
-        headers=headers,
-    )
+    # headers = {"User-Agent": "Curl"}
+    headers = {
+        "D2R-Contact": "d2r@rbaron.net",
+        "D2R-Platform": "Home Assistant",
+        "D2R-Repo": "https://github.com/rbaron/d2r-tracker-ha-custom-component",
+    }
+    params = {
+        "token": api_key,
+    }
+    response = requests.get(url, timeout=60, params=params, headers=headers)
     response.raise_for_status()
     return response.json()
+
+
+def ensure_bool(val: bool | str) -> bool:
+    if isinstance(val, bool):
+        return val
+    elif isinstance(val, str):
+        match val.lower():
+            case "true":
+                return True
+            case "false":
+                return False
+    raise ValueError(f"Invalid value for bool: {val}")
 
 
 def group_d2runewizard_response(response: dict):
@@ -84,11 +101,75 @@ def group_d2runewizard_response(response: dict):
         "version": response["version"],
     }
     for entry in response["servers"]:
-        res["entries"][entry["region"]][entry["ladder"]][entry["hardcore"]] = {
+        res["entries"][entry["region"]][ensure_bool(entry["ladder"])][
+            ensure_bool(entry["hardcore"])
+        ] = {
             "progress": entry["progress"],
             "last_update_timestamp": entry["lastUpdate"]["seconds"],
         }
     return res
+
+
+class D2RuneWizardClient:
+    def __init__(self, api_key: str | None):
+        self.api_key = api_key
+        self.terrorzone_next_fetch = datetime.now()
+        self.last_terrorzone = None
+
+    @cached(cache=TTLCache(maxsize=1, ttl=60))
+    def get_dclone_progress(self):
+        grouped_response = group_d2runewizard_response(
+            get_d2runewizard_api_response(
+                "https://d2runewizard.com/api/diablo-clone-progress/all", self.api_key
+            )
+        )
+        return grouped_response
+
+    def get_terrorzone(self):
+        now = datetime.now()
+
+        if now < self.terrorzone_next_fetch:
+            _LOGGER.debug("Using cached terrorzone: %s", self.last_terrorzone)
+            return self.last_terrorzone
+
+        self.last_terrorzone = self._internal_get_terrorzone()
+        n_votes = self.last_terrorzone["terror_zone"]["n_votes"]
+        if n_votes > 3:
+            # Round time to next whole hour.
+            self.terrorzone_next_fetch = now.replace(
+                minute=0, second=0, microsecond=0
+            ) + timedelta(hours=1)
+            _LOGGER.debug(
+                "Got valid answer. Will fetch next terror zone at: %s",
+                self.terrorzone_next_fetch,
+            )
+        else:
+            self.terrorzone_next_fetch = now + timedelta(seconds=60)
+            _LOGGER.debug(
+                "Got answer with insufficient votes. \
+                    Will fetch next terror zone at: %s",
+                self.terrorzone_next_fetch,
+            )
+
+        return self.last_terrorzone
+
+    @cached(cache=TTLCache(maxsize=1, ttl=60))
+    def _internal_get_terrorzone(self):
+        res = get_d2runewizard_api_response(
+            "https://d2runewizard.com/api/terror-zone", self.api_key
+        )
+        return {
+            "terror_zone": {
+                "zone": res["terrorZone"]["highestProbabilityZone"]["zone"],
+                "probability": res["terrorZone"]["highestProbabilityZone"][
+                    "probability"
+                ],
+                "n_votes": res["terrorZone"]["highestProbabilityZone"]["amount"],
+                "last_updated": dt.utc_from_timestamp(
+                    res["terrorZone"]["lastUpdate"]["seconds"]
+                ),
+            }
+        }
 
 
 def get_diablo2io_api_response(api_key: str | None) -> str:
@@ -171,24 +252,29 @@ class D2RDataUpdateCoordinator(DataUpdateCoordinator):
         self.hass = hass
         self.config_entry = config_entry
         self.data = {}
+        self.origin = config_entry.data["origin"]
+        if self.origin == ORIGIN_D2RUNEWIZARD:
+            self.client = D2RuneWizardClient(config_entry.data.get(CONF_API_KEY))
 
     async def _async_update_data(self):
         """Update data via API."""
         origin = self.config_entry.data["origin"]
         api_key = self.config_entry.data.get(CONF_API_KEY)
         try:
-            if origin == "diablo2.io":
+            if origin == ORIGIN_DIABLO2IO:
                 return group_diablo2_response(
                     await self.hass.async_add_executor_job(
                         get_diablo2io_api_response, api_key
                     )
                 )
-            if origin == "d2runewizard":
-                return group_d2runewizard_response(
-                    await self.hass.async_add_executor_job(
-                        get_d2runewizard_api_response, api_key
-                    )
+            if origin == ORIGIN_D2RUNEWIZARD:
+                res = await self.hass.async_add_executor_job(
+                    self.client.get_dclone_progress
                 )
+                res.update(
+                    await self.hass.async_add_executor_job(self.client.get_terrorzone)
+                )
+                return res
             raise RuntimeError(f"Invalid origin: {origin}")
         except requests.HTTPError as err:
             raise UpdateFailed(f"Error fetching from {origin}: {err}") from err

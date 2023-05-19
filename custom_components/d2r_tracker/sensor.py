@@ -2,15 +2,18 @@
 from __future__ import annotations
 
 import itertools
+import logging
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorEntity, const as sensor_const
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import D2RDataUpdateCoordinator
-from .const import DOMAIN
+from .const import DOMAIN, ORIGIN_D2RUNEWIZARD
+
+_LOGGER = logging.getLogger(__name__)
 
 REGIONS = [
     "Americas",
@@ -41,6 +44,15 @@ async def async_setup_entry(
         )
     ]
 
+    if origin == ORIGIN_D2RUNEWIZARD:
+        entities.extend(
+            [
+                D2RTerrorZoneTracker(coordinator, device_id, origin),
+                D2RTerrorZoneLastUpdatedSensor(coordinator, device_id, origin),
+                D2RTerrorZoneNVotesSensor(coordinator, device_id, origin),
+            ]
+        )
+
     async_add_entities(entities)
 
 
@@ -63,6 +75,11 @@ class D2RSensorBase(CoordinatorEntity[D2RDataUpdateCoordinator], SensorEntity):
     def device_info(self):
         """Device info."""
         return self.coordinator.device_info
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return self.coordinator.last_update_success and self.coordinator.data
 
 
 class D2RDiabloCloneTracker(D2RSensorBase):
@@ -97,10 +114,93 @@ class D2RDiabloCloneTracker(D2RSensorBase):
     def native_value(self):
         """Return sensor state."""
         data = self.coordinator.data
-        progress = data["entries"][self.region][self.ladder][self.hardcore]["progress"]
+        try:
+            progress = data["entries"][self.region][self.ladder][self.hardcore][
+                "progress"
+            ]
+        except KeyError:
+            _LOGGER.error(
+                "KeyError: region: %s, ladder: %s, hardcore: %s",
+                self.region,
+                self.ladder,
+                self.hardcore,
+            )
+            return None
         return f"{progress}/6"
 
+
+class D2RTerrorZoneTracker(D2RSensorBase):
+    """D2R Terror Zone tracker."""
+
+    _attr_icon = "mdi:map"
+
+    def __init__(
+        self,
+        coordinator: D2RDataUpdateCoordinator,
+        device_id: str,
+        origin: str,
+    ) -> None:
+        """Initialize a new D2RDiabloCloneTracker sensor."""
+        super().__init__(
+            coordinator,
+            f"{origin} - Terror Zone",
+            device_id,
+        )
+
     @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return self.coordinator.last_update_success and self.coordinator.data
+    def native_value(self):
+        """Return sensor state."""
+        data = self.coordinator.data
+        return f"{data['terror_zone']['zone']}"
+
+
+class D2RTerrorZoneLastUpdatedSensor(D2RSensorBase):
+    """D2R Terror Zone Last Updated Sensor."""
+
+    _attr_device_class = sensor_const.SensorDeviceClass.TIMESTAMP
+    _attr_name = "Terror Zone Last Updated"
+
+    def __init__(
+        self,
+        coordinator: D2RDataUpdateCoordinator,
+        device_id: str,
+        origin: str,
+    ) -> None:
+        """Initialize a new D2RDiabloCloneTracker sensor."""
+        super().__init__(
+            coordinator,
+            f"{origin} - Terror Zone Last Updated",
+            device_id,
+        )
+
+    @property
+    def native_value(self):
+        """Return sensor state."""
+        data = self.coordinator.data
+        return data["terror_zone"]["last_updated"]
+
+
+class D2RTerrorZoneNVotesSensor(D2RSensorBase):
+    """D2R Terror Zone Number of Votes Sensor."""
+
+    _attr_icon = "mdi:vote"
+    _attr_name = "Terror Zone Votes"
+
+    def __init__(
+        self,
+        coordinator: D2RDataUpdateCoordinator,
+        device_id: str,
+        origin: str,
+    ) -> None:
+        """Initialize a new D2RTerrorZoneNVotesSensor sensor."""
+        super().__init__(
+            coordinator,
+            f"{origin} - Terror Zone Votes",
+            device_id,
+        )
+
+    @property
+    def native_value(self):
+        """Return sensor state."""
+        data = self.coordinator.data
+        return data["terror_zone"]["n_votes"]

@@ -13,13 +13,15 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.selector import selector
 
-from .const import DOMAIN
+from .const import DOMAIN, ORIGIN_D2RUNEWIZARD, ORIGIN_DIABLO2IO
 
 _LOGGER = logging.getLogger(__name__)
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        "origin": selector({"select": {"options": ["diablo2.io", "d2runewizard"]}}),
+        "origin": selector(
+            {"select": {"options": [ORIGIN_DIABLO2IO, ORIGIN_D2RUNEWIZARD]}}
+        ),
         vol.Optional(CONF_API_KEY): str,
     }
 )
@@ -32,6 +34,9 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     """
     if "origin" not in data:
         raise InvalidOrigin
+    elif data["origin"] == ORIGIN_D2RUNEWIZARD and not data.get(CONF_API_KEY):
+        raise MissingAPIKey
+
     return {
         "title": f"{data['origin']}",
         "api_key": data.get("api_key"),
@@ -67,4 +72,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class InvalidOrigin(HomeAssistantError):
-    """Error to indicate there is invalid origin."""
+    """Error to indicate there is an invalid origin."""
+
+
+class MissingAPIKey(HomeAssistantError):
+    """Error to indicate the API key is missing"""

@@ -7,6 +7,6 @@
   "documentation": "https://github.com/rbaron/d2r-tracker-ha-custom-component",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/rbaron/d2r-tracker-ha-custom-component/issues",
-  "requirements": [],
+  "requirements": ["cachetools==5.3.0"],
   "version": "1.0.0"
 }
