@@ -1,4 +1,5 @@
 """Config flow for Diablo 2 Resurrected integration."""
+
 from __future__ import annotations
 
 import logging

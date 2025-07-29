@@ -1,4 +1,5 @@
 """The Diablo 2 Resurrected integration."""
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -17,6 +18,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt
 
 from .const import DOMAIN, ORIGIN_D2RUNEWIZARD, ORIGIN_DIABLO2IO
+from .d2runewizard import D2RuneWizardClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,129 +49,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN].pop(entry.entry_id)
 
     return unload_ok
-
-
-def get_d2runewizard_api_response(url: str, api_key: str | None) -> str:
-    """Return API response."""
-    # headers = {"User-Agent": "Curl"}
-    headers = {
-        "D2R-Contact": "d2r@rbaron.net",
-        "D2R-Platform": "Home Assistant",
-        "D2R-Repo": "https://github.com/rbaron/d2r-tracker-ha-custom-component",
-    }
-    params = {
-        "token": api_key,
-    }
-    response = requests.get(url, timeout=60, params=params, headers=headers)
-    response.raise_for_status()
-    return response.json()
-
-
-def ensure_bool(val: bool | str) -> bool:
-    if isinstance(val, bool):
-        return val
-    elif isinstance(val, str):
-        match val.lower():
-            case "true":
-                return True
-            case "false":
-                return False
-    raise ValueError(f"Invalid value for bool: {val}")
-
-
-def group_d2runewizard_response(response: dict):
-    """Return grouped respoonse.
-
-      Example: {
-        entries: {
-            [region: str]: {
-                [ladder: bool]: {
-                    [hardcore: bool] = {
-                        "progress": int,
-                        "last_update_timestamp": int,
-                    },
-                },
-            },
-        },
-        provided_by: str,
-        version: str,
-    }.
-    """
-    res = {
-        "entries": defaultdict(lambda: defaultdict(dict)),
-        "provided_by": response["providedBy"],
-        "version": response["version"],
-    }
-    for entry in response["servers"]:
-        res["entries"][entry["region"]][ensure_bool(entry["ladder"])][
-            ensure_bool(entry["hardcore"])
-        ] = {
-            "progress": entry["progress"],
-            "last_update_timestamp": entry["lastUpdate"]["seconds"],
-        }
-    return res
-
-
-class D2RuneWizardClient:
-    def __init__(self, api_key: str | None):
-        self.api_key = api_key
-        self.terrorzone_next_fetch = datetime.now()
-        self.last_terrorzone = None
-
-    @cached(cache=TTLCache(maxsize=1, ttl=60))
-    def get_dclone_progress(self):
-        grouped_response = group_d2runewizard_response(
-            get_d2runewizard_api_response(
-                "https://d2runewizard.com/api/diablo-clone-progress/all", self.api_key
-            )
-        )
-        return grouped_response
-
-    def get_terrorzone(self):
-        now = datetime.now()
-
-        if now < self.terrorzone_next_fetch:
-            _LOGGER.debug("Using cached terrorzone: %s", self.last_terrorzone)
-            return self.last_terrorzone
-
-        self.last_terrorzone = self._internal_get_terrorzone()
-        n_votes = self.last_terrorzone["terror_zone"]["n_votes"]
-        if n_votes > 3:
-            # Round time to next whole hour.
-            self.terrorzone_next_fetch = now.replace(
-                minute=0, second=0, microsecond=0
-            ) + timedelta(hours=1)
-            _LOGGER.debug(
-                "Got valid answer. Will fetch next terror zone at: %s",
-                self.terrorzone_next_fetch,
-            )
-        else:
-            self.terrorzone_next_fetch = now + timedelta(seconds=60)
-            _LOGGER.debug(
-                "Got answer with insufficient votes. \
-                    Will fetch next terror zone at: %s",
-                self.terrorzone_next_fetch,
-            )
-
-        return self.last_terrorzone
-
-    @cached(cache=TTLCache(maxsize=1, ttl=60))
-    def _internal_get_terrorzone(self):
-        res = get_d2runewizard_api_response(
-            "https://d2runewizard.com/api/terror-zone", self.api_key
-        )
-        return {
-            "terror_zone": {
-                "zone": res["terrorZone"]["highestProbabilityZone"]["zone"],
-                "probability": res["terrorZone"]["highestProbabilityZone"][
-                    "probability"
-                ],
-                "n_votes": res["terrorZone"]["highestProbabilityZone"]["amount"],
-                "last_updated": dt.utc_from_timestamp(
-                    res["terrorZone"]["lastUpdate"]["seconds"]
-                ),
-            }
-        }
 
 
 def get_diablo2io_api_response(api_key: str | None) -> str:

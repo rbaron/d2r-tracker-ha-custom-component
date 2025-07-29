@@ -1,4 +1,5 @@
 """D2R sensor integration."""
+
 from __future__ import annotations
 
 import itertools
@@ -48,6 +49,7 @@ async def async_setup_entry(
         entities.extend(
             [
                 D2RTerrorZoneTracker(coordinator, device_id, origin),
+                D2RNextTerrorZoneTracker(coordinator, device_id, origin),
                 D2RTerrorZoneLastUpdatedSensor(coordinator, device_id, origin),
                 D2RTerrorZoneNVotesSensor(coordinator, device_id, origin),
             ]
@@ -154,6 +156,31 @@ class D2RTerrorZoneTracker(D2RSensorBase):
         return f"{data['terror_zone']['zone']}"
 
 
+class D2RNextTerrorZoneTracker(D2RSensorBase):
+    """D2R Terror Zone tracker."""
+
+    _attr_icon = "mdi:map"
+
+    def __init__(
+        self,
+        coordinator: D2RDataUpdateCoordinator,
+        device_id: str,
+        origin: str,
+    ) -> None:
+        """Initialize a new D2RNextTerrorZoneTracker sensor."""
+        super().__init__(
+            coordinator,
+            f"{origin} - Next Terror Zone",
+            device_id,
+        )
+
+    @property
+    def native_value(self):
+        """Return sensor state."""
+        data = self.coordinator.data
+        return f"{data['terror_zone']['next']}"
+
+
 class D2RTerrorZoneLastUpdatedSensor(D2RSensorBase):
     """D2R Terror Zone Last Updated Sensor."""
 
@@ -202,5 +229,6 @@ class D2RTerrorZoneNVotesSensor(D2RSensorBase):
     @property
     def native_value(self):
         """Return sensor state."""
-        data = self.coordinator.data
-        return data["terror_zone"]["n_votes"]
+        # data = self.coordinator.data
+        # return data["terror_zone"]["n_votes"]
+        return 0
