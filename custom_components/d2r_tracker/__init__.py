@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import timedelta
 import logging
+from typing import Any
 
 from cachetools import cached, TTLCache
 
@@ -13,11 +14,16 @@ import requests
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_API_KEY, Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.util import dt
 
-from .const import DOMAIN, ORIGIN_D2RUNEWIZARD, ORIGIN_DIABLO2IO
+from .const import (
+    CONF_CONTACT_EMAIL,
+    CONF_ORIGIN,
+    DOMAIN,
+    ORIGIN_D2RUNEWIZARD,
+    ORIGIN_DIABLO2IO,
+)
 from .d2runewizard import D2RuneWizardClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -51,11 +57,18 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_ok
 
 
-def get_diablo2io_api_response(api_key: str | None) -> str:
-    """Return API response."""
+@cached(cache=TTLCache(maxsize=1, ttl=60))
+def get_diablo2io_api_response(api_key: str | None, contact_email: str) -> dict:
+    """Return API response as a dictionary."""
     response = requests.get(
         "https://diablo2.io/dclone_api.php",
-        headers={"User-Agent": "Curl"},
+        # As per https://diablo2.io/forums/public-api-for-diablo-clone-uber-diablo-tracker-t906872.html
+        # No API key is required as of writing.
+        # > Timings between API requests from your app should never be less than 60 seconds apart.
+        headers={
+            "From": "github.com/rbaron/d2r-tracker-ha-custom-component",
+            "Contact-Email": contact_email,
+        },
         timeout=60,
     )
     response.raise_for_status()
@@ -131,19 +144,25 @@ class D2RDataUpdateCoordinator(DataUpdateCoordinator):
         self.hass = hass
         self.config_entry = config_entry
         self.data = {}
-        self.origin = config_entry.data["origin"]
+        self.origin = config_entry.data[CONF_ORIGIN]
         if self.origin == ORIGIN_D2RUNEWIZARD:
-            self.client = D2RuneWizardClient(config_entry.data.get(CONF_API_KEY))
+            self.client = D2RuneWizardClient(
+                config_entry.data.get(CONF_API_KEY),
+                config_entry.data[CONF_CONTACT_EMAIL],
+            )
 
-    async def _async_update_data(self):
+    async def _async_update_data(self) -> Any:
         """Update data via API."""
-        origin = self.config_entry.data["origin"]
+        origin = self.config_entry.data[CONF_ORIGIN]
         api_key = self.config_entry.data.get(CONF_API_KEY)
         try:
             if origin == ORIGIN_DIABLO2IO:
+                contact_email = self.config_entry.data[CONF_CONTACT_EMAIL]
                 return group_diablo2_response(
                     await self.hass.async_add_executor_job(
-                        get_diablo2io_api_response, api_key
+                        get_diablo2io_api_response,
+                        api_key,
+                        contact_email,
                     )
                 )
             if origin == ORIGIN_D2RUNEWIZARD:
@@ -161,7 +180,7 @@ class D2RDataUpdateCoordinator(DataUpdateCoordinator):
     @property
     def device_info(self) -> DeviceInfo:
         """Device info."""
-        origin = self.config_entry.data["origin"]
+        origin = self.config_entry.data[CONF_ORIGIN]
         return DeviceInfo(
             identifiers={(DOMAIN, str(self.config_entry.unique_id))},
             manufacturer=origin,

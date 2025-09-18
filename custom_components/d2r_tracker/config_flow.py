@@ -10,19 +10,26 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_API_KEY
 from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResult
+from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.selector import selector
 
-from .const import DOMAIN, ORIGIN_D2RUNEWIZARD, ORIGIN_DIABLO2IO
+from .const import (
+    CONF_CONTACT_EMAIL,
+    CONF_ORIGIN,
+    DOMAIN,
+    ORIGIN_D2RUNEWIZARD,
+    ORIGIN_DIABLO2IO,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        "origin": selector(
+        CONF_ORIGIN: selector(
             {"select": {"options": [ORIGIN_DIABLO2IO, ORIGIN_D2RUNEWIZARD]}}
         ),
+        vol.Required(CONF_CONTACT_EMAIL): str,
         vol.Optional(CONF_API_KEY): str,
     }
 )
@@ -33,15 +40,14 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
     """
-    if "origin" not in data:
+    if CONF_ORIGIN not in data:
         raise InvalidOrigin
-    elif data["origin"] == ORIGIN_D2RUNEWIZARD and not data.get(CONF_API_KEY):
+    elif data[CONF_ORIGIN] == ORIGIN_D2RUNEWIZARD and not data.get(CONF_API_KEY):
         raise MissingAPIKey
 
     return {
-        "title": f"{data['origin']}",
-        "api_key": data.get("api_key"),
-        "origin": data["origin"],
+        "title": f"{data[CONF_ORIGIN]}",
+        "unique_id": f"d2r-{data[CONF_ORIGIN]}",
     }
 
 
@@ -52,7 +58,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -64,7 +70,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
             else:
-                await self.async_set_unique_id(f"d2r-{user_input['origin']}")
+                await self.async_set_unique_id(info["unique_id"])
                 return self.async_create_entry(title=info["title"], data=user_input)
 
         return self.async_show_form(

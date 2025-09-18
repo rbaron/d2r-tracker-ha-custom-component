@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import D2RDataUpdateCoordinator
-from .const import DOMAIN, ORIGIN_D2RUNEWIZARD
+from .const import CONF_ORIGIN, DOMAIN, ORIGIN_D2RUNEWIZARD
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ async def async_setup_entry(
         "coordinator"
     ]
 
-    origin = config_entry.data["origin"]
+    origin = config_entry.data[CONF_ORIGIN]
 
     assert device_id is not None
 
@@ -51,7 +51,6 @@ async def async_setup_entry(
                 D2RTerrorZoneTracker(coordinator, device_id, origin),
                 D2RNextTerrorZoneTracker(coordinator, device_id, origin),
                 D2RTerrorZoneLastUpdatedSensor(coordinator, device_id, origin),
-                D2RTerrorZoneNVotesSensor(coordinator, device_id, origin),
             ]
         )
 
@@ -81,7 +80,9 @@ class D2RSensorBase(CoordinatorEntity[D2RDataUpdateCoordinator], SensorEntity):
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        return self.coordinator.last_update_success and self.coordinator.data
+        return (
+            self.coordinator.last_update_success and self.coordinator.data is not None
+        )
 
 
 class D2RDiabloCloneTracker(D2RSensorBase):
@@ -204,31 +205,4 @@ class D2RTerrorZoneLastUpdatedSensor(D2RSensorBase):
     def native_value(self):
         """Return sensor state."""
         data = self.coordinator.data
-        return data["terror_zone"]["last_updated"]
-
-
-class D2RTerrorZoneNVotesSensor(D2RSensorBase):
-    """D2R Terror Zone Number of Votes Sensor."""
-
-    _attr_icon = "mdi:vote"
-    _attr_name = "Terror Zone Votes"
-
-    def __init__(
-        self,
-        coordinator: D2RDataUpdateCoordinator,
-        device_id: str,
-        origin: str,
-    ) -> None:
-        """Initialize a new D2RTerrorZoneNVotesSensor sensor."""
-        super().__init__(
-            coordinator,
-            f"{origin} - Terror Zone Votes",
-            device_id,
-        )
-
-    @property
-    def native_value(self):
-        """Return sensor state."""
-        # data = self.coordinator.data
-        # return data["terror_zone"]["n_votes"]
-        return 0
+        return data["last_updated"]

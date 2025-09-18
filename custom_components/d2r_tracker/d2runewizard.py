@@ -1,3 +1,5 @@
+from ast import Dict
+from typing import Any
 import requests
 from cachetools import cached, TTLCache
 from datetime import datetime, timedelta
@@ -14,21 +16,21 @@ except ImportError:
     pass
 
 
-def get_d2runewizard_api_response(url: str, api_key: str | None) -> str:
+def get_d2runewizard_api_response(
+    url: str, api_key: str | None, contact_email: str
+) -> dict:
     """Return API response."""
-    # headers = {"User-Agent": "Curl"}
     headers = {
-        "D2R-Contact": "d2r@rbaron.net",
-        "D2R-Platform": "Home Assistant",
+        "D2R-Contact": contact_email,
+        "D2R-Platform": "Home Assistant -- github.com/rbaron/d2r-tracker-ha-custom-component",
         "D2R-Repo": "https://github.com/rbaron/d2r-tracker-ha-custom-component",
     }
     params = {
         "token": api_key,
     }
-    # response = requests.get(url, timeout=60, params=params, headers=headers)
-    response = requests.get(url, timeout=60, headers=headers)
+    response = requests.get(url, timeout=60, headers=headers, params=params)
     response.raise_for_status()
-    print(f"Response from {url}: {json.dumps(response.json(), indent=2)}")
+    _LOGGER.info(f"Response from {url}: {json.dumps(response.json(), indent=2)}")
     return response.json()
 
 
@@ -68,7 +70,7 @@ def group_d2runewizard_response(response: dict):
         "version": response["version"],
     }
     for entry in response["servers"]:
-        print(f"Processing entry: {json.dumps(entry, indent=2)}")
+        _LOGGER.info(f"Processing entry: {json.dumps(entry, indent=2)}")
         res["entries"][entry["region"]][ensure_bool(entry["ladder"])][
             ensure_bool(entry["hardcore"])
         ] = {
@@ -79,30 +81,37 @@ def group_d2runewizard_response(response: dict):
 
 
 class D2RuneWizardClient:
-    def __init__(self, api_key: str | None):
+    def __init__(self, api_key: str | None, contact_email: str):
         self.api_key = api_key
         self.terrorzone_next_fetch = datetime.now()
+        self.contact_email = contact_email
         self.last_terrorzone = None
 
     @cached(cache=TTLCache(maxsize=1, ttl=60))
-    def get_dclone_progress(self):
+    def get_dclone_progress(self) -> dict:
         grouped_response = group_d2runewizard_response(
             get_d2runewizard_api_response(
-                "https://d2runewizard.com/api/diablo-clone-progress/all", self.api_key
+                "https://d2runewizard.com/api/diablo-clone-progress/all",
+                self.api_key,
+                self.contact_email,
             )
         )
         return grouped_response
 
-    def get_terrorzone(self):
+    def get_terrorzone(self) -> dict:
         now = datetime.now()
 
         if now < self.terrorzone_next_fetch:
             _LOGGER.debug("Using cached terrorzone: %s", self.last_terrorzone)
-            return self.last_terrorzone
+            return self.last_terrorzone or {}
 
         self.last_terrorzone = self._internal_get_terrorzone()
-        self.terrorzone_next_fetch = now + timedelta(minutes=5)
-        _LOGGER.debug(
+        # Next update: 10 seconds past the hour, capped to 30 minutes from now.
+        next_fetch = (now + timedelta(hours=1)).replace(
+            minute=0, second=10, microsecond=0
+        )
+        self.terrorzone_next_fetch = min(next_fetch, now + timedelta(minutes=30))
+        _LOGGER.info(
             "Will fetch next terror zone at: %s",
             self.terrorzone_next_fetch,
         )
@@ -112,20 +121,12 @@ class D2RuneWizardClient:
     @cached(cache=TTLCache(maxsize=1, ttl=60))
     def _internal_get_terrorzone(self):
         res = get_d2runewizard_api_response(
-            "https://d2runewizard.com/api/terror-zone", self.api_key
+            "https://d2runewizard.com/api/terror-zone", self.api_key, self.contact_email
         )
         return {
             "terror_zone": {
                 "zone": res["currentTerrorZone"]["zone"],
                 "next": res["nextTerrorZone"]["zone"],
             },
-            "last_updated": datetime.utcnow().isoformat(),
+            "last_updated": dt.now(),
         }
-
-
-if __name__ == "__main__":
-    # Example usage
-    client = D2RuneWizardClient(api_key="")
-    # res = client.get_dclone_progress()
-    res = client.get_terrorzone()
-    print(res)
