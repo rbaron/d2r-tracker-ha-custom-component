@@ -66,8 +66,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 info = await validate_input(self.hass, user_input)
             except InvalidOrigin:
                 errors["base"] = "invalid_auth"
-            except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected exception")
+            except Exception as e:  # pylint: disable=broad-except
+                _LOGGER.exception(f"Unexpected exception {e}")
                 errors["base"] = "unknown"
             else:
                 await self.async_set_unique_id(info["unique_id"])

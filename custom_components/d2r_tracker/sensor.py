@@ -11,16 +11,16 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from custom_components.d2r_tracker.providers import (
+    HC,
+    LADDER,
+    REGIONS,
+)
+
 from . import D2RDataUpdateCoordinator
 from .const import CONF_ORIGIN, DOMAIN, ORIGIN_D2RUNEWIZARD
 
 _LOGGER = logging.getLogger(__name__)
-
-REGIONS = [
-    "Americas",
-    "Asia",
-    "Europe",
-]
 
 
 async def async_setup_entry(
@@ -39,18 +39,16 @@ async def async_setup_entry(
     assert device_id is not None
 
     entities: list[SensorEntity] = [
-        D2RDiabloCloneTracker(coordinator, device_id, origin, region, ladder, hardcore)
-        for (region, ladder, hardcore) in itertools.product(
-            REGIONS, [True, False], [True, False]
-        )
+        D2RDiabloCloneTracker(coordinator, device_id, region, ladder, hardcore)
+        for (region, ladder, hardcore) in itertools.product(REGIONS, LADDER, HC)
     ]
 
     if origin == ORIGIN_D2RUNEWIZARD:
         entities.extend(
             [
-                D2RTerrorZoneTracker(coordinator, device_id, origin),
-                D2RNextTerrorZoneTracker(coordinator, device_id, origin),
-                D2RTerrorZoneLastUpdatedSensor(coordinator, device_id, origin),
+                D2RTerrorZoneTracker(coordinator, device_id),
+                D2RNextTerrorZoneTracker(coordinator, device_id),
+                D2RTerrorZoneLastUpdatedSensor(coordinator, device_id),
             ]
         )
 
@@ -69,7 +67,7 @@ class D2RSensorBase(CoordinatorEntity[D2RDataUpdateCoordinator], SensorEntity):
         """Initialize a new D2R sensor."""
         super().__init__(coordinator)
         self._device_id = device_id
-        self._attr_name = f"D2R {sensor_type}"
+        self._attr_name = f"{sensor_type}"
         self._attr_unique_id = f"{sensor_type}-{device_id}"
 
     @property
@@ -89,24 +87,19 @@ class D2RDiabloCloneTracker(D2RSensorBase):
     """D2R Diablo Clone Tracker for one region/ladder/hardcore config."""
 
     _attr_icon = "mdi:poll"
-    origin: str
-    region: str
-    ladder: bool
-    hardcore: bool
 
     def __init__(
         self,
         coordinator: D2RDataUpdateCoordinator,
         device_id: str,
-        origin: str,
         region: str,
-        ladder: bool,
-        hardcore: bool,
+        ladder: str,
+        hardcore: str,
     ) -> None:
         """Initialize a new D2RDiabloCloneTracker sensor."""
         super().__init__(
             coordinator,
-            f"{origin} {region} {'HC' if hardcore else 'SC'} {'L' if ladder else 'NL'}",
+            f"DClone {region} {ladder} {hardcore}",
             device_id,
         )
         self.region = region
@@ -116,20 +109,25 @@ class D2RDiabloCloneTracker(D2RSensorBase):
     @property
     def native_value(self):
         """Return sensor state."""
-        data = self.coordinator.data
+        dclone_progress = self.coordinator.data.dclone_progress
+        if dclone_progress is None:
+            return None
+
         try:
-            progress = data["entries"][self.region][self.ladder][self.hardcore][
-                "progress"
-            ]
-        except KeyError:
-            _LOGGER.error(
-                "KeyError: region: %s, ladder: %s, hardcore: %s",
+            progress = getattr(
+                getattr(getattr(dclone_progress, self.region), self.ladder),
+                self.hardcore,
+            )
+            return progress
+        # Possibly provider does not have data for this region/ladder/hardcore combo.
+        except AttributeError:
+            _LOGGER.debug(
+                "AttributeError in %s: region: %s, ladder: %s, hardcore: %s",
+                dclone_progress,
                 self.region,
                 self.ladder,
                 self.hardcore,
             )
-            return None
-        return f"{progress}/6"
 
 
 class D2RTerrorZoneTracker(D2RSensorBase):
@@ -141,20 +139,21 @@ class D2RTerrorZoneTracker(D2RSensorBase):
         self,
         coordinator: D2RDataUpdateCoordinator,
         device_id: str,
-        origin: str,
     ) -> None:
         """Initialize a new D2RDiabloCloneTracker sensor."""
         super().__init__(
             coordinator,
-            f"{origin} - Terror Zone",
+            "Terror Zone",
             device_id,
         )
 
     @property
     def native_value(self):
         """Return sensor state."""
-        data = self.coordinator.data
-        return f"{data['terror_zone']['zone']}"
+        terror_zone = self.coordinator.data.terror_zone
+        if terror_zone is None:
+            return None
+        return terror_zone.current
 
 
 class D2RNextTerrorZoneTracker(D2RSensorBase):
@@ -166,20 +165,21 @@ class D2RNextTerrorZoneTracker(D2RSensorBase):
         self,
         coordinator: D2RDataUpdateCoordinator,
         device_id: str,
-        origin: str,
     ) -> None:
         """Initialize a new D2RNextTerrorZoneTracker sensor."""
         super().__init__(
             coordinator,
-            f"{origin} - Next Terror Zone",
+            "Next Terror Zone",
             device_id,
         )
 
     @property
     def native_value(self):
         """Return sensor state."""
-        data = self.coordinator.data
-        return f"{data['terror_zone']['next']}"
+        terror_zone = self.coordinator.data.terror_zone
+        if terror_zone is None:
+            return None
+        return terror_zone.next
 
 
 class D2RTerrorZoneLastUpdatedSensor(D2RSensorBase):
@@ -192,17 +192,18 @@ class D2RTerrorZoneLastUpdatedSensor(D2RSensorBase):
         self,
         coordinator: D2RDataUpdateCoordinator,
         device_id: str,
-        origin: str,
     ) -> None:
         """Initialize a new D2RDiabloCloneTracker sensor."""
         super().__init__(
             coordinator,
-            f"{origin} - Terror Zone Last Updated",
+            "Terror Zone Last Updated",
             device_id,
         )
 
     @property
     def native_value(self):
         """Return sensor state."""
-        data = self.coordinator.data
-        return data["last_updated"]
+        terror_zone = self.coordinator.data.terror_zone
+        if terror_zone is None:
+            return None
+        return terror_zone.updated_at
