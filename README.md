@@ -1,23 +1,24 @@
 # D2R Tracker
 
-This is a [Home Assistant]() custom component used for tracking [Diablo Clone events](https://diablo.fandom.com/wiki/%C3%9Cber_Diablo) in the game [Diablo 2 Resurrected](https://diablo2.blizzard.com/en-us/).
+A [Home Assistant](https://home-assistant.io) integration for tracking [Diablo 2 Resurrected](https://diablo2.blizzard.com/en-us/) in-game events.
 
-The custom component instantiates sensors in Home Assistant that track the progress of the Diablo Clone event in each region, ladder/non-ladder, softcore/hardcore realms:
+Installing this integration will make the following sensors available in Home Assistant:
+- Current and next [Terror Zones](https://diablo.fandom.com/wiki/Terror_Zone)
+- [Uber Diablo / Diablo Clone](https://diablo.fandom.com/wiki/%C3%9Cber_Diablo) progress tracker, per region, ladder/non-ladder and hardcore/softcore
 
 <p align="center">
-  <img height=600 src="./assets/sensors.png">
+  <img height=600 src="./assets/dashboard.png">
 </p>
 
 Diablo Clone will walk the earth once the counter reaches `6/6`.
 
-## Data Origin
-The event progress is crowdsourced in Discord and polled from one of the two APIs (generously made publicly available) every few minutes.
+## Data Providers
+The data is polled from APIs genernously provided by the community. Make sure to read through their policies (linked below) before using this integration. You can choose between these providers during setup.
 
-### diablo2.io
-Make sure to read through their [fair usage policy](https://diablo2.io/forums/diablo-clone-uber-diablo-tracker-public-api-t906872.html) before using this integration. No API key is required at the time of writing - just leave it empty whe setting up the integration.
-
-### d2runewizard.com
-Make sure to read through their [fair usage poliicy](https://d2runewizard.com/integration) before using this integration. The API key is optional for the DClone Tracker endpoint, but in practice requests may be throttled without one.
+| Provider | Current Terror Zone? | Next Terror Zone? | DClone Progress? | Getting Access |
+|----------|----------------------|-------------------|------------------|--------|
+| [d2runewizard.com](https://d2runewizard.com) | ✅ | ✅ | ✅ | [Fair use policy and getting an API key](https://d2runewizard.com/integration) |
+| [diablo2.io](https://diablo2.io) | 🚫 | 🚫 | ✅ | [Fair use policy](https://diablo2.io/forums/diablo-clone-uber-diablo-tracker-public-api-t906872.html) |
 
 ## Installation
 ### Manual

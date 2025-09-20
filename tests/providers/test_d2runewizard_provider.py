@@ -178,7 +178,9 @@ def test_get_dclone_progress(mock_api_response, mock_dclone_response):
     progress = provider.get_dclone_progress()
 
     mock_api_response.assert_called_once_with(
-        "https://api.d2runewizard.com/v1/servers", "test_key", "test@example.com"
+        "https://d2runewizard.com/api/diablo-clone-progress/all",
+        "test_key",
+        "test@example.com",
     )
 
     assert progress == DCloneProgress(
@@ -233,7 +235,7 @@ def test_api_headers(mock_requests_get, mock_dclone_response):
     mock_requests_get.assert_called_once()
     args, kwargs = mock_requests_get.call_args
 
-    assert args[0] == "https://api.d2runewizard.com/v1/servers"
+    assert args[0] == "https://d2runewizard.com/api/diablo-clone-progress/all"
     assert kwargs["timeout"] == 60
 
     expected_headers = {
