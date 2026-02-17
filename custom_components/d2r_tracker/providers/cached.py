@@ -14,6 +14,8 @@ import logging
 
 _LOGGER = logging.getLogger(__name__)
 
+TERRORZONE_FETCH_INTERVAL_MINUTES = 30
+
 
 class CachedProvider(ProviderBase):
     def __init__(self, provider: ProviderBase):
@@ -54,7 +56,7 @@ class CachedProvider(ProviderBase):
         now = dt.now()
 
         # In the first 5 minutes, fetch every minute.
-        if now.minute < 5:
+        if (now.minute % TERRORZONE_FETCH_INTERVAL_MINUTES) < 5:
             self.next_terror_zone_update_after = now.replace(
                 second=1, microsecond=0
             ) + timedelta(minutes=1)
@@ -62,7 +64,7 @@ class CachedProvider(ProviderBase):
         else:
             self.next_terror_zone_update_after = now.replace(
                 minute=0, second=1, microsecond=0
-            ) + timedelta(minutes=30)
+            ) + timedelta(minutes=TERRORZONE_FETCH_INTERVAL_MINUTES)
 
         _LOGGER.debug(
             f"Next terror zone update scheduled at {self.next_terror_zone_update_after.isoformat()}"
