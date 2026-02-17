@@ -56,13 +56,13 @@ class CachedProvider(ProviderBase):
         # In the first 5 minutes, fetch every minute.
         if now.minute < 5:
             self.next_terror_zone_update_after = now.replace(
-                second=0, microsecond=0
+                second=1, microsecond=0
             ) + timedelta(minutes=1)
-        # Otherwise, schedule fetch for the next whole hour.
+        # Otherwise, schedule fetch for the next whole half hour.
         else:
             self.next_terror_zone_update_after = now.replace(
-                minute=0, second=0, microsecond=0
-            ) + timedelta(hours=1)
+                minute=0, second=1, microsecond=0
+            ) + timedelta(minutes=30)
 
         _LOGGER.debug(
             f"Next terror zone update scheduled at {self.next_terror_zone_update_after.isoformat()}"
