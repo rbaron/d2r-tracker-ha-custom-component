@@ -62,8 +62,9 @@ class CachedProvider(ProviderBase):
             ) + timedelta(minutes=1)
         # Otherwise, schedule fetch for the next whole half hour.
         else:
+            interval_start = now.minute - now.minute % TERRORZONE_FETCH_INTERVAL_MINUTES
             self.next_terror_zone_update_after = now.replace(
-                minute=0, second=1, microsecond=0
+                minute=interval_start, second=1, microsecond=0
             ) + timedelta(minutes=TERRORZONE_FETCH_INTERVAL_MINUTES)
 
         _LOGGER.debug(

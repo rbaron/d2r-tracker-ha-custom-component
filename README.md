@@ -12,13 +12,18 @@ Installing this integration will make the following sensors available in Home As
 
 Diablo Clone will walk the earth once the counter reaches `6/6`.
 
+## Game Versions
+Reign of the Warlock (RotW) and Lord of Destruction (LoD) run on separate realms, so Diablo Clone progress is tracked separately for each. During setup, choose which one to track (RotW is the default). Add the integration a second time to track both. Terror Zones are shared between the two.
+
+Entries created before RotW support was added are migrated to LoD, which is the data they were already showing.
+
 ## Data Providers
 The data is polled from APIs genernously provided by the community. Make sure to read through their policies (linked below) before using this integration. You can choose between these providers during setup.
 
-| Provider | Current Terror Zone? | Next Terror Zone? | DClone Progress? | Getting Access |
-|----------|----------------------|-------------------|------------------|--------|
-| [d2runewizard.com](https://d2runewizard.com) | ✅ | ✅ | ✅ | [Fair use policy and getting an API key](https://d2runewizard.com/integration) |
-| [diablo2.io](https://diablo2.io) | 🚫 | 🚫 | ✅ | [Fair use policy](https://diablo2.io/forums/diablo-clone-uber-diablo-tracker-public-api-t906872.html) |
+| Provider | Current Terror Zone? | Next Terror Zone? | DClone Progress? | RotW & LoD? | Getting Access |
+|----------|----------------------|-------------------|------------------|-------------|--------|
+| [d2runewizard.com](https://d2runewizard.com) | ✅ | ✅ | ✅ | ✅ | [Fair use policy and getting an API key](https://d2runewizard.com/integration) |
+| [diablo2.io](https://diablo2.io) | 🚫 | 🚫 | ✅ | ✅ | [Fair use policy](https://diablo2.io/forums/diablo-clone-uber-diablo-tracker-public-api-t906872.html) |
 
 ## Installation
 ### Manual

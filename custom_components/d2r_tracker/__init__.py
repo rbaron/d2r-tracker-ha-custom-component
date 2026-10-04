@@ -18,8 +18,11 @@ from custom_components.d2r_tracker.providers.diablo2io import Diablo2IOProvider
 
 from .const import (
     CONF_CONTACT_EMAIL,
+    CONF_GAME_VERSION,
     CONF_ORIGIN,
     DOMAIN,
+    GAME_VERSION_LABELS,
+    GAME_VERSION_LOD,
     ORIGIN_D2RUNEWIZARD,
     ORIGIN_DIABLO2IO,
 )
@@ -45,6 +48,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate old config entries."""
+    if entry.version == 1:
+        # Version 1 predates Reign of the Warlock; its data came from LoD realms.
+        hass.config_entries.async_update_entry(
+            entry,
+            data={**entry.data, CONF_GAME_VERSION: GAME_VERSION_LOD},
+            version=2,
+        )
+        _LOGGER.debug("Migrated config entry %s to version 2", entry.entry_id)
+
+    return True
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
@@ -54,17 +71,17 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 def cached_provider_factory(
-    origin: str, api_key: str | None, contact_email: str
+    origin: str, api_key: str | None, contact_email: str, game_version: str
 ) -> CachedProvider:
     """Return provider based on origin."""
 
     def make_raw_provider() -> ProviderBase:
         if origin == ORIGIN_DIABLO2IO:
-            return Diablo2IOProvider(api_key, contact_email)
+            return Diablo2IOProvider(api_key, contact_email, game_version)
         elif origin == ORIGIN_D2RUNEWIZARD:
             if not api_key:
                 raise ValueError(f"API key is required for {origin}")
-            return D2RuneWizardProvider(api_key, contact_email)
+            return D2RuneWizardProvider(api_key, contact_email, game_version)
         raise ValueError(f"Invalid origin: {origin}")
 
     return CachedProvider(make_raw_provider())
@@ -95,6 +112,7 @@ class D2RDataUpdateCoordinator(DataUpdateCoordinator[ProviderResponse]):
             config_entry.data[CONF_ORIGIN],
             config_entry.data.get(CONF_API_KEY),
             config_entry.data[CONF_CONTACT_EMAIL],
+            config_entry.data[CONF_GAME_VERSION],
         )
 
     async def _async_update_data(self) -> ProviderResponse:
@@ -106,8 +124,9 @@ class D2RDataUpdateCoordinator(DataUpdateCoordinator[ProviderResponse]):
     def device_info(self) -> DeviceInfo:
         """Device info."""
         origin = self.config_entry.data[CONF_ORIGIN]
+        game_version = GAME_VERSION_LABELS[self.config_entry.data[CONF_GAME_VERSION]]
         return DeviceInfo(
             identifiers={(DOMAIN, str(self.config_entry.unique_id))},
             manufacturer=self.cached_provider.get_attribution(),
-            name=origin,
+            name=f"{origin} ({game_version})",
         )

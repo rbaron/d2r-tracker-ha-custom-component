@@ -16,8 +16,11 @@ from homeassistant.helpers.selector import selector
 
 from .const import (
     CONF_CONTACT_EMAIL,
+    CONF_GAME_VERSION,
     CONF_ORIGIN,
     DOMAIN,
+    GAME_VERSION_LABELS,
+    GAME_VERSION_ROTW,
     ORIGIN_D2RUNEWIZARD,
     ORIGIN_DIABLO2IO,
 )
@@ -28,6 +31,16 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         CONF_ORIGIN: selector(
             {"select": {"options": [ORIGIN_DIABLO2IO, ORIGIN_D2RUNEWIZARD]}}
+        ),
+        vol.Required(CONF_GAME_VERSION, default=GAME_VERSION_ROTW): selector(
+            {
+                "select": {
+                    "options": [
+                        {"value": value, "label": label}
+                        for value, label in GAME_VERSION_LABELS.items()
+                    ]
+                }
+            }
         ),
         vol.Required(CONF_CONTACT_EMAIL): str,
         vol.Optional(CONF_API_KEY): str,
@@ -45,16 +58,17 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     elif data[CONF_ORIGIN] == ORIGIN_D2RUNEWIZARD and not data.get(CONF_API_KEY):
         raise MissingAPIKey
 
+    game_version = data[CONF_GAME_VERSION]
     return {
-        "title": f"{data[CONF_ORIGIN]}",
-        "unique_id": f"d2r-{data[CONF_ORIGIN]}",
+        "title": f"{data[CONF_ORIGIN]} ({GAME_VERSION_LABELS[game_version]})",
+        "unique_id": f"d2r-{data[CONF_ORIGIN]}-{game_version}",
     }
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Diablo 2 Resurrected."""
 
-    VERSION = 1
+    VERSION = 2
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None

@@ -1,4 +1,4 @@
-from custom_components.d2r_tracker.const import ORIGIN_D2RUNEWIZARD
+from custom_components.d2r_tracker.const import GAME_VERSION_ROTW, ORIGIN_D2RUNEWIZARD
 from custom_components.d2r_tracker.providers import (
     DCloneCoreProgress,
     DCloneLadderProgress,
@@ -47,10 +47,15 @@ def ensure_bool(val: bool | str) -> bool:
     raise ValueError(f"Invalid value for bool: {val}")
 
 
-def group_dclone_response(response: dict) -> DCloneProgress:
+def group_dclone_response(response: dict, game_version: str) -> DCloneProgress:
+    rotw = game_version == GAME_VERSION_ROTW
     entries = defaultdict(lambda: defaultdict(dict))
     for entry in response["servers"]:
-        entries[entry["region"]][ensure_bool(entry["ladder"])][
+        if ensure_bool(entry.get("rotw", False)) != rotw:
+            continue
+        # RotW servers are reported with a suffixed region, e.g. "AmericasRotw".
+        region = entry["region"].removesuffix("Rotw")
+        entries[region][ensure_bool(entry["ladder"])][
             ensure_bool(entry["hardcore"])
         ] = {
             "progress": entry["progress"],
@@ -87,13 +92,17 @@ def group_dclone_response(response: dict) -> DCloneProgress:
 class D2RuneWizardProvider(ProviderBase):
     NAME = ORIGIN_D2RUNEWIZARD
 
-    def __init__(self, api_key: str, contact_email: str):
+    def __init__(self, api_key: str, contact_email: str, game_version: str):
         self.api_key = api_key
         self.contact_email = contact_email
+        self.game_version = game_version
 
     def get_terror_zone(self) -> TerrorZoneResponse:
+        # Terror zones are shared between LoD and RotW.
         res = get_d2runewizard_api_response(
-            "https://d2runewizard.com/api/terror-zone", self.api_key, self.contact_email
+            "https://d2runewizard.com/api/trackers/terror-zone",
+            self.api_key,
+            self.contact_email,
         )
         return TerrorZoneResponse(
             current=res["currentTerrorZone"]["zone"],
@@ -104,10 +113,11 @@ class D2RuneWizardProvider(ProviderBase):
     def get_dclone_progress(self) -> DCloneProgress:
         grouped_response = group_dclone_response(
             get_d2runewizard_api_response(
-                "https://d2runewizard.com/api/diablo-clone-progress/all",
+                "https://d2runewizard.com/api/trackers/diablo-clone",
                 self.api_key,
                 self.contact_email,
-            )
+            ),
+            self.game_version,
         )
         return grouped_response
 

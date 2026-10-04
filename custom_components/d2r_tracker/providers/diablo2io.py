@@ -1,4 +1,8 @@
-from custom_components.d2r_tracker.const import ORIGIN_DIABLO2IO
+from custom_components.d2r_tracker.const import (
+    GAME_VERSION_LOD,
+    GAME_VERSION_ROTW,
+    ORIGIN_DIABLO2IO,
+)
 from custom_components.d2r_tracker.providers import (
     DCloneCoreProgress,
     DCloneLadderProgress,
@@ -15,11 +19,20 @@ import logging
 
 _LOGGER = logging.getLogger(__name__)
 
+# Values for the `ver` query parameter. Without it, the API returns LoD data.
+GAME_VERSION_PARAM = {
+    GAME_VERSION_LOD: "1",
+    GAME_VERSION_ROTW: "2",
+}
 
-def get_diablo2io_api_response(api_key: str | None, contact_email: str) -> dict:
+
+def get_diablo2io_api_response(
+    api_key: str | None, contact_email: str, game_version: str
+) -> dict:
     """Return API response as a dictionary."""
     response = requests.get(
         "https://diablo2.io/dclone_api.php",
+        params={"ver": GAME_VERSION_PARAM[game_version]},
         # As per https://diablo2.io/forums/public-api-for-diablo-clone-uber-diablo-tracker-t906872.html
         # No API key is required as of writing.
         # > Timings between API requests from your app should never be less than 60 seconds apart.
@@ -34,7 +47,7 @@ def get_diablo2io_api_response(api_key: str | None, contact_email: str) -> dict:
     return response.json()
 
 
-def group_diablo2io_response(response: dict) -> DCloneProgress:
+def group_diablo2io_response(response: dict, game_version: str) -> DCloneProgress:
     entries = defaultdict(lambda: defaultdict(dict))
 
     bool_map = {
@@ -51,6 +64,9 @@ def group_diablo2io_response(response: dict) -> DCloneProgress:
         return region_map[region]
 
     for entry in response:
+        # Entries without a version predate RotW and are LoD.
+        if entry.get("ver", "1") != GAME_VERSION_PARAM[game_version]:
+            continue
         region: str = get_region(entry["region"])
         ladder: bool = bool_map[entry["ladder"]]
         hardcore: bool = bool_map[entry["hc"]]
@@ -85,9 +101,10 @@ def group_diablo2io_response(response: dict) -> DCloneProgress:
 class Diablo2IOProvider(ProviderBase):
     NAME = ORIGIN_DIABLO2IO
 
-    def __init__(self, api_key: str | None, contact_email: str):
+    def __init__(self, api_key: str | None, contact_email: str, game_version: str):
         self.api_key = api_key
         self.contact_email = contact_email
+        self.game_version = game_version
 
     def get_terror_zone(self) -> TerrorZoneResponse:
         raise NotImplementedError
@@ -97,7 +114,9 @@ class Diablo2IOProvider(ProviderBase):
             get_diablo2io_api_response(
                 self.api_key,
                 self.contact_email,
-            )
+                self.game_version,
+            ),
+            self.game_version,
         )
 
     def get_attribution(self) -> str:

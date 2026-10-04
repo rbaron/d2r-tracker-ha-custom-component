@@ -105,24 +105,46 @@ def test_get_terror_zone_fast_caching(mock_dt, cached_provider, mock_provider):
     assert result1 is not result3
 
 
+@pytest.mark.parametrize(
+    "initial_time,last_cached_time,refresh_time",
+    [
+        # First half of the hour: cache until the half hour.
+        (
+            datetime(2025, 1, 1, 10, 10, 0),
+            datetime(2025, 1, 1, 10, 29, 59),
+            datetime(2025, 1, 1, 10, 30, 1),
+        ),
+        # Second half of the hour: cache until the next hour.
+        (
+            datetime(2025, 1, 1, 10, 40, 0),
+            datetime(2025, 1, 1, 10, 59, 59),
+            datetime(2025, 1, 1, 11, 0, 1),
+        ),
+    ],
+)
 @patch("custom_components.d2r_tracker.providers.cached.dt")
-def test_get_terror_zone_slow_caching(mock_dt, cached_provider, mock_provider):
-    """Test that get_terror_zone caches results for until next whole hour after 5 minutes."""
-    # Set current time to 10:10 AM.
-    initial_time = datetime(2025, 1, 1, 10, 10, 0)
+def test_get_terror_zone_slow_caching(
+    mock_dt,
+    cached_provider,
+    mock_provider,
+    initial_time,
+    last_cached_time,
+    refresh_time,
+):
+    """Test that get_terror_zone caches results until the next half hour after 5 minutes."""
     mock_dt.now.return_value = initial_time
 
     result1 = cached_provider.get_terror_zone()
     assert mock_provider.get_terror_zone_call_count == 1
 
-    # Call at 10:59 (still before next hour) should hit the cache.
-    mock_dt.now.return_value = datetime(2025, 1, 1, 10, 59, 0)
+    # Call right before the next half hour should hit the cache.
+    mock_dt.now.return_value = last_cached_time
     result2 = cached_provider.get_terror_zone()
     assert mock_provider.get_terror_zone_call_count == 1
     assert result1 is result2
 
-    # Call at 11:00 should refresh the cache.
-    mock_dt.now.return_value = datetime(2025, 1, 1, 11, 0, 0)
+    # Call at the next half hour should refresh the cache.
+    mock_dt.now.return_value = refresh_time
     result3 = cached_provider.get_terror_zone()
     assert mock_provider.get_terror_zone_call_count == 2
     assert result1 is not result3

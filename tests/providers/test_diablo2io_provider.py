@@ -3,6 +3,7 @@ import json
 
 import pytest
 
+from custom_components.d2r_tracker.const import GAME_VERSION_LOD, GAME_VERSION_ROTW
 from custom_components.d2r_tracker.providers.diablo2io import (
     Diablo2IOProvider,
 )
@@ -125,7 +126,11 @@ def test_get_dclone(mock_requests_get, mock_dclone_response):
     mock_response.json.return_value = mock_dclone_response
     mock_requests_get.return_value = mock_response
 
-    provider = Diablo2IOProvider(api_key="test_key", contact_email="test@example.com")
+    provider = Diablo2IOProvider(
+        api_key="test_key",
+        contact_email="test@example.com",
+        game_version=GAME_VERSION_LOD,
+    )
 
     response = provider.get_dclone_progress()
 
@@ -141,6 +146,8 @@ def test_get_dclone(mock_requests_get, mock_dclone_response):
         "From": "Home Assistant integration github.com/rbaron/d2r-tracker-ha-custom-component",
     }
     assert kwargs["headers"] == expected_headers
+
+    assert kwargs["params"] == {"ver": "1"}
 
     assert response == DCloneProgress(
         Americas=DCloneLadderProgress(
@@ -161,12 +168,55 @@ def test_get_dclone(mock_requests_get, mock_dclone_response):
 
 def test_terror_zone_unimplemented():
     """Test that TerrorZone is unimplemented and raises NotImplementedError."""
-    provider = Diablo2IOProvider(api_key="test_key", contact_email="test@example.com")
+    provider = Diablo2IOProvider(
+        api_key="test_key",
+        contact_email="test@example.com",
+        game_version=GAME_VERSION_LOD,
+    )
     with pytest.raises(NotImplementedError):
         provider.get_terror_zone()
 
 
 def test_attribution():
-    provider = Diablo2IOProvider(api_key="test_key", contact_email="test@example.com")
+    provider = Diablo2IOProvider(
+        api_key="test_key",
+        contact_email="test@example.com",
+        game_version=GAME_VERSION_LOD,
+    )
     assert provider.NAME == "diablo2.io"
     assert provider.get_attribution() == "Data courtesy of diablo2.io"
+
+
+@patch("requests.get")
+def test_get_dclone_rotw(mock_requests_get, mock_dclone_response):
+    """Test that RotW data is requested and entries for other versions are ignored."""
+    rotw_response = [{**entry, "ver": "2"} for entry in mock_dclone_response]
+    # A stray LoD entry that must not override the RotW one.
+    rotw_response.append(
+        {
+            "progress": "6",
+            "region": "1",
+            "ladder": "1",
+            "hc": "1",
+            "timestamped": "1758183982",
+            "reporter_id": "76181",
+            "ver": "1",
+        }
+    )
+    mock_response = MagicMock()
+    mock_response.json.return_value = rotw_response
+    mock_requests_get.return_value = mock_response
+
+    provider = Diablo2IOProvider(
+        api_key="test_key",
+        contact_email="test@example.com",
+        game_version=GAME_VERSION_ROTW,
+    )
+
+    response = provider.get_dclone_progress()
+
+    _, kwargs = mock_requests_get.call_args
+    assert kwargs["params"] == {"ver": "2"}
+
+    assert response.Americas.L.HC == Progress(1)
+    assert response.Europe.L.SC == Progress(4)
